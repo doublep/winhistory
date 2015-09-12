@@ -68,7 +68,17 @@
     (define-key map (kbd "<backspace>") 'winhistory-delete-last-filter-char)
     (define-key map (kbd "RET")         'winhistory-finalize-active-buffer-switch)
     (define-key map (kbd "<return>")    'winhistory-finalize-active-buffer-switch)
-    map))
+    map)
+  "Keymap active during a switch process.")
+
+(defvar winhistory-active-filter-switch-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "<right>")     'winhistory-next)
+    (define-key map (kbd "<left>")      'winhistory-previous)
+    map)
+  "Keymap active during a switch process that involved filtering.
+These bindings are not active when you first initiate a switch,
+but are activated if you type any filter characters.")
 
 (defun winhistory--rebuild-keymap (variable value)
   (when (and (boundp variable) (symbol-value variable))
@@ -425,7 +435,9 @@ Silently do nothing if there is no active switching process."
   (if winhistory--active-switch
       (unless (memq this-command '(winhistory-next winhistory-previous))
         (let* ((keys            (this-command-keys))
-               (special-command (lookup-key winhistory-active-switch-map keys)))
+               (special-command (or (lookup-key winhistory-active-switch-map keys)
+                                    (and (plist-member winhistory--active-switch :filter)
+                                         (lookup-key winhistory-active-filter-switch-map keys)))))
           (if special-command
               (setq this-command special-command)
             (if (eq (lookup-key global-map keys) 'self-insert-command)
