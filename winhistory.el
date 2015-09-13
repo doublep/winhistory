@@ -344,7 +344,7 @@ Silently do nothing if there is no active switching process."
           (winhistory--set-active-switch :index       (setq index (mod (+ index change) (length buffers)))
                                          :index-stack nil))
         (switch-to-buffer (aref buffers index) t t))
-      (let ((message-log-max message-log-max))
+      (let ((message-log-max nil))
         (message "%s" (winhistory--format-switch-options (window-body-width (minibuffer-window))))))))
 
 (defun winhistory--refilter-and-continue (&optional new-index)
