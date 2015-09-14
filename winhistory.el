@@ -306,14 +306,21 @@ Silently do nothing if there is no active switching process."
   (unless winhistory--active-switch
     (unless winhistory--buffer-histories
       (setq winhistory--buffer-histories (make-hash-table :test 'eq :weakness 'key)))
-    (walk-windows (lambda (window)
-                    (let* ((top-buffer (window-buffer window))
-                           refreshed-stack)
-                      (dolist (stacked-buffer (gethash window winhistory--buffer-histories))
-                        (unless (or (not (buffer-live-p stacked-buffer)) (eq stacked-buffer top-buffer))
-                          (push stacked-buffer refreshed-stack)))
-                      (puthash window (cons top-buffer (nreverse refreshed-stack))
-                               winhistory--buffer-histories))))))
+    (let* ((all-buffers   (buffer-list))
+           (buried-buffer (nth (1- (length all-buffers)) all-buffers)))
+      (walk-windows (lambda (window)
+                      (let* ((top-buffer (window-buffer window))
+                             refreshed-stack
+                             had-buried-buffer)
+                        (dolist (stacked-buffer (gethash window winhistory--buffer-histories))
+                          (unless (or (not (buffer-live-p stacked-buffer)) (eq stacked-buffer top-buffer))
+                            (if (eq stacked-buffer buried-buffer)
+                                (setq had-buried-buffer t)
+                              (push stacked-buffer refreshed-stack))))
+                        (when had-buried-buffer
+                          (setq refreshed-stack (cons buried-buffer refreshed-stack)))
+                        (puthash window (cons top-buffer (nreverse refreshed-stack))
+                                 winhistory--buffer-histories)))))))
 
 (defun winhistory--set-active-switch (&rest properties)
   (while properties
