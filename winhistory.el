@@ -431,16 +431,21 @@ Silently do nothing if there is no active switching process."
                   (push winhistory--right-arrow strings))
                 (apply 'concat (nreverse strings)))))))
 
+(defun winhistory--do-lookup-key (map keys)
+  (let ((result (lookup-key map keys)))
+    (unless (integerp result)
+      result)))
+
 (defun winhistory--before-command ()
   (if winhistory--active-switch
       (unless (memq this-command '(winhistory-next winhistory-previous))
         (let* ((keys            (this-command-keys))
-               (special-command (or (lookup-key winhistory-active-switch-map keys)
+               (special-command (or (winhistory--do-lookup-key winhistory-active-switch-map keys)
                                     (and (plist-member winhistory--active-switch :filter)
-                                         (lookup-key winhistory-active-filter-switch-map keys)))))
+                                         (winhistory--do-lookup-key winhistory-active-filter-switch-map keys)))))
           (if special-command
               (setq this-command special-command)
-            (if (eq (lookup-key global-map keys) 'self-insert-command)
+            (if (eq (winhistory--do-lookup-key global-map keys) 'self-insert-command)
                 (setq this-command 'winhistory-extend-filter)
               (winhistory-finalize-active-buffer-switch)))))
     (winhistory-finalize-active-buffer-switch)))
