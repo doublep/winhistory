@@ -68,6 +68,7 @@
     (define-key map (kbd "<backspace>") 'winhistory-delete-last-filter-char)
     (define-key map (kbd "RET")         'winhistory-finalize-active-buffer-switch)
     (define-key map (kbd "<return>")    'winhistory-finalize-active-buffer-switch)
+    (define-key map (kbd "C-g")         'winhistory-cancel-switch)
     map)
   "Keymap active during a switch process.")
 
@@ -280,6 +281,14 @@ Silently do nothing if there is no active switching process."
       (setq winhistory--active-switch nil)
       (switch-to-buffer (current-buffer) nil t)
       (winhistory--track-window-history))))
+
+(defun winhistory-cancel-switch ()
+  (interactive)
+  (when winhistory--active-switch
+    (-let (((&plist :window window :all-buffers all-buffers) winhistory--active-switch))
+      (with-selected-window window
+        (switch-to-buffer (aref all-buffers 0) t t)
+        (winhistory-finalize-active-buffer-switch)))))
 
 
 
