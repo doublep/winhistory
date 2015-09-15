@@ -97,43 +97,25 @@ but are activated if you type any filter characters.")
 
 
 (defcustom winhistory-next-buffer-keybinding
-  (kbd "<f8>")
+  (kbd "<M-S-right>")
   "Keybinding to switch to the next buffer.
 You can also tweak keymap `winhistory-mode-map' directly.
 
-There are several sane alternatives for next/previous
-keybindings.  Unfortunately, all have downsides.
-
-  <S-right> / <S-left>      conflict with `shift-select-mode';
-  <M-S-right> / <M-S-left>  conflict with `shift-select-mode';
-  <s-right> / <s-left>      not available on terminals;
-  <M-n> / <M-p>             frequently used in other modes.
-
-Some of these may also conflict with `windmove-*' keybindings.
-
-Because of this, default keybindings are F8 / F7, but you are of
-course free to rebind as you like."
+The default keybinding conflicts with command `left-word' when
+`shift-select-mode' is active.  You may want to change this
+keybinding if you rely on that."
   :type  'key-sequence
   :set   'winhistory--rebuild-keymap
   :group 'winhistory)
 
 (defcustom winhistory-previous-buffer-keybinding
-  (kbd "<f7>")
+  (kbd "<M-S-left>")
   "Keybinding to switch to the previous buffer.
 You can also tweak keymap `winhistory-mode-map' directly.
 
-There are several sane alternatives for next/previous
-keybindings.  Unfortunately, all have downsides.
-
-  <S-right> / <S-left>      conflict with `shift-select-mode';
-  <M-S-right> / <M-S-left>  conflict with `shift-select-mode';
-  <s-right> / <s-left>      not available on terminals;
-  <M-n> / <M-p>             frequently used in other modes.
-
-Some of these may also conflict with `windmove-*' keybindings.
-
-Because of this, default keybindings are F8 / F7, but you are of
-course free to rebind as you like."
+The default keybinding conflicts with command `left-word' when
+`shift-select-mode' is active.  You may want to change this
+keybinding if you rely on that."
   :type  'key-sequence
   :set   'winhistory--rebuild-keymap
   :group 'winhistory)
