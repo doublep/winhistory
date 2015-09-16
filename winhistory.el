@@ -64,10 +64,6 @@
 
 (defvar winhistory-active-switch-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "DEL")         'winhistory-delete-last-filter-char)
-    (define-key map (kbd "<backspace>") 'winhistory-delete-last-filter-char)
-    (define-key map (kbd "RET")         'winhistory-finalize-active-buffer-switch)
-    (define-key map (kbd "<return>")    'winhistory-finalize-active-buffer-switch)
     (define-key map (kbd "C-g")         'winhistory-cancel-switch)
     map)
   "Keymap active during a switch process.")
@@ -76,6 +72,10 @@
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "<right>")     'winhistory-next)
     (define-key map (kbd "<left>")      'winhistory-previous)
+    (define-key map (kbd "DEL")         'winhistory-delete-last-filter-char)
+    (define-key map (kbd "<backspace>") 'winhistory-delete-last-filter-char)
+    (define-key map (kbd "RET")         'winhistory-finalize-active-buffer-switch)
+    (define-key map (kbd "<return>")    'winhistory-finalize-active-buffer-switch)
     map)
   "Keymap active during a switch process that involved filtering.
 These bindings are not active when you first initiate a switch,
@@ -88,7 +88,9 @@ but are activated if you type any filter characters.")
   (define-key winhistory-mode-map (symbol-value variable)
     (pcase variable
       (`winhistory-next-buffer-keybinding     'winhistory-next)
-      (`winhistory-previous-buffer-keybinding 'winhistory-previous))))
+      (`winhistory-previous-buffer-keybinding 'winhistory-previous)
+      (`winhistory-filter-keybinding          'winhistory-filter)
+      (`winhistory-bury-buffer-keybinding     'winhistory-bury-buffer))))
 
 
 (defgroup winhistory nil
@@ -116,6 +118,24 @@ You can also tweak keymap `winhistory-mode-map' directly.
 The default keybinding conflicts with command `left-word' when
 `shift-select-mode' is active.  You may want to change this
 keybinding if you rely on that."
+  :type  'key-sequence
+  :set   'winhistory--rebuild-keymap
+  :group 'winhistory)
+
+(defcustom winhistory-filter-keybinding
+  (kbd "<M-S-up>")
+  "Enable filter during the current switch.
+If no buffer switch is currently in progress, a new one is
+started."
+  :type  'key-sequence
+  :set   'winhistory--rebuild-keymap
+  :group 'winhistory)
+
+(defcustom winhistory-bury-buffer-keybinding
+  (kbd "<M-S-down>")
+  "Bury currently selected buffer.
+If no buffer switch is currently in progress the command
+additionally starts one."
   :type  'key-sequence
   :set   'winhistory--rebuild-keymap
   :group 'winhistory)
@@ -183,7 +203,7 @@ the filter contains an uppercase letter."
   "Details of current buffer switching process.
 When set, this is an plist with the following properties:
 ':window', ':all-buffers', ':buffers', ':index', ':from', ':to'',
-':filter', ':index-stack'.")
+':filter', ':filter-activated', ':index-stack'.")
 
 (defvar winhistory--after-filter ": ")
 (defvar winhistory--left-arrow   "...")
@@ -228,6 +248,17 @@ Instead you are just presented with switching options."
   ;; the selected buffer.
   (winhistory--continue-switch (unless (winhistory--maybe-start-switch) -1)))
 
+(defun winhistory-filter ()
+  (interactive)
+  (winhistory--maybe-start-switch)
+  (winhistory--set-active-switch :filter-activated t)
+  (winhistory--continue-switch))
+
+(defun winhistory-bury-buffer ()
+  (interactive)
+  ;; FIXME
+  )
+
 (defun winhistory-extend-filter ()
   "Add a character to the buffer switching filter.
 This command is supposed to be \"bound\" to self-inserting keys
@@ -235,8 +266,9 @@ only."
   (interactive)
   (when (and winhistory--active-switch (characterp last-command-event))
     (-let (((&plist :index index :filter filter :index-stack index-stack) winhistory--active-switch))
-      (winhistory--set-active-switch :filter      (concat filter (string last-command-event))
-                                     :index-stack (cons index index-stack))
+      (winhistory--set-active-switch :filter-activated t
+                                     :filter           (concat filter (string last-command-event))
+                                     :index-stack      (cons index index-stack))
       (winhistory--refilter-and-continue))))
 
 (defun winhistory-delete-last-filter-char ()
@@ -245,8 +277,9 @@ If the filter is already empty, silently do nothing."
   (interactive)
   (when winhistory--active-switch
     (-let (((&plist :filter filter :index-stack index-stack) winhistory--active-switch))
-      (winhistory--set-active-switch :filter      (when (> (length filter) 1) (substring filter 0 -1))
-                                     :index-stack (cdr index-stack))
+      (winhistory--set-active-switch :filter-activated t
+                                     :filter           (when (> (length filter) 1) (substring filter 0 -1))
+                                     :index-stack      (cdr index-stack))
       (winhistory--refilter-and-continue (car index-stack)))))
 
 (defun winhistory-finalize-active-buffer-switch ()
@@ -380,10 +413,11 @@ Silently do nothing if there is no active switching process."
          options))
 
 (defun winhistory--format-switch-options (length-limit)
-  (-let* (((&plist :buffers buffers :index index :from from :to to :filter filter) winhistory--active-switch)
-          (last                                                                    (1- (length buffers))))
-    (concat (when filter
-              (concat (propertize filter 'face 'winhistory-filter) winhistory--after-filter))
+  (-let* (((&plist :buffers buffers :index index :from from :to to :filter filter :filter-activated filter-activated)
+           winhistory--active-switch)
+          (last (1- (length buffers))))
+    (concat (when filter-activated
+              (concat (propertize (or filter "") 'face 'winhistory-filter) winhistory--after-filter))
             (if (< last 0)
                 "[no match]"
               (when (or (null from)
@@ -438,12 +472,12 @@ Silently do nothing if there is no active switching process."
   (if winhistory--active-switch
       (unless (memq this-command '(winhistory-next winhistory-previous))
         (let* ((keys            (this-command-keys))
+               (filtering       (plist-get winhistory--active-switch :filter-activated))
                (special-command (or (winhistory--do-lookup-key winhistory-active-switch-map keys)
-                                    (and (plist-member winhistory--active-switch :filter)
-                                         (winhistory--do-lookup-key winhistory-active-filter-switch-map keys)))))
+                                    (and filtering (winhistory--do-lookup-key winhistory-active-filter-switch-map keys)))))
           (if special-command
               (setq this-command special-command)
-            (if (eq (winhistory--do-lookup-key global-map keys) 'self-insert-command)
+            (if (and filtering (eq (winhistory--do-lookup-key global-map keys) 'self-insert-command))
                 (setq this-command 'winhistory-extend-filter)
               (winhistory-finalize-active-buffer-switch)))))
     (winhistory-finalize-active-buffer-switch)))
