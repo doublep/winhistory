@@ -53,6 +53,8 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'dash))
+
 
 
 ;;; Customization.
