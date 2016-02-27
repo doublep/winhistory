@@ -142,6 +142,70 @@ additionally starts one."
   :set   'winhistory--rebuild-keymap
   :group 'winhistory)
 
+(defcustom winhistory-buffer-matcher
+  'winhistory-name-substring-buffer-matcher
+  "Matcher that checks whether a buffer matches entered filter.
+
+There are three standard matcher functions, as well as
+possibility to define your own, see below.
+
+Exact buffer name substring
+
+    Matching buffer name must include the filter as exact
+    substring.  E.g. filter \"ead\" matches a buffer named
+    \"readme.txt\", but \"ead.txt\" does not.  This is the
+    default.
+
+Buffer name word part subsequence
+
+    Matching buffer name must include all word parts from the
+    filter, possibly with intervening characters.  For example,
+    filter \"ead.txt\" matches a buffer named \"readme.txt\"
+    (even though there is no \"me\" in the filter), but
+    \"eadtxt\" does not.
+
+Buffer name character subsequence
+
+    Matching buffer name must include all characters from the
+    filter, possibly with additional intervening characters.
+    E.g. \"eadtxt\" matches a buffer named \"readme.txt\".
+
+You can also define your own matcher, even not limited to looking
+at buffer names.  A matcher must be a function that accepts two
+arguments: FILTER (string, may be nil if there is no filter) and
+STD-CASE-FOLD-SEARCH (t or nil).  The latter is computed from
+`winhistory-case-fold-filter', with `no-uppercase' already
+processed as described.  The function must return a list of
+exactly three elements:
+
+    (FILTER-ARG MATCHER-FN CASE-FOLD-SEARCH)
+
+FILTER-ARG
+
+    Preprocessed filter, normally a regexp for buffer name (but
+    see the next argument).
+
+MATCHER-FN
+
+    If nil, FILTER-ARG is used as a regexp and matched against
+    buffer name.  Otherwise, this must be a function that accepts
+    FILTER-ARG (as above) and BUFFER and returns non-nil if the
+    buffer matches the filter.  Note that it receives the full
+    buffer structure, not just its name.
+
+CASE-FOLD-SEARCH
+
+    Value to bind `case-fold-search' to.  Normally you should
+    just return STD-CASE-FOLD-SEARCH untouched here, but there
+    are no restrictions."
+  :type  '(choice (const :tag "Exact buffer name substring"
+                         winhistory-name-substring-buffer-matcher)
+                  (const :tag "Buffer name word part subsequence"
+                         winhistory-name-word-part-subsequence-buffer-matcher)
+                  (const :tag "Buffer name character subsequence"
+                         winhistory-name-char-subsequence-buffer-matcher)
+                  (symbol :tag "Custom")))
+
 
 (defcustom winhistory-ignored-buffers '("\\` ")
   "List of regexps or functions matching buffers to ignore completely.
@@ -309,6 +373,29 @@ Silently do nothing if there is no active switching process."
 
 
 
+;;; Buffer matchers.
+
+(defun winhistory-name-substring-buffer-matcher (filter std-case-fold-search)
+  (list (when filter (regexp-quote filter))
+        nil
+        std-case-fold-search))
+
+(defun winhistory-name-word-part-subsequence-buffer-matcher (filter std-case-fold-search)
+  (list (when filter
+          (let (parts)
+            ;; This is not really to replace anything, just collect the "parts".
+            (replace-regexp-in-string "\\w+\\|." (lambda (part) (push part parts) "") filter)
+            (mapconcat 'regexp-quote (nreverse parts) ".*")))
+        nil
+        std-case-fold-search))
+
+(defun winhistory-name-char-subsequence-buffer-matcher (filter std-case-fold-search)
+  (list (when filter (mapconcat (lambda (char) (regexp-quote (char-to-string char))) filter ".*"))
+        nil
+        std-case-fold-search))
+
+
+
 ;;; Internal functions.
 
 (defun winhistory--set-up ()
@@ -382,17 +469,20 @@ Silently do nothing if there is no active switching process."
 
 (defun winhistory--refilter-and-continue (&optional new-index)
   (-let* (((&plist :buffers buffers :all-buffers all-buffers :filter filter :index index) winhistory--active-switch)
-          (filter           (when filter (regexp-quote filter)))
-          (case-fold-search (if (and filter (eq winhistory-case-fold-filter 'no-uppercase))
-                                (not (let ((case-fold-search nil)) (string-match "[[:upper:]]" filter)))
-                              winhistory-case-fold-filter))
+          ((filter matcher case-fold-search)
+           (funcall winhistory-buffer-matcher
+                    filter (if (and filter (eq winhistory-case-fold-filter 'no-uppercase))
+                               (not (let ((case-fold-search nil)) (string-match "[[:upper:]]" filter)))
+                             winhistory-case-fold-filter)))
           (seen-current     nil)
           (buffers          nil))
     (dotimes (k (length all-buffers))
       (let ((buffer (aref all-buffers k)))
         (when (eq buffer (current-buffer))
           (setq seen-current t))
-        (when (or (null filter) (string-match filter (buffer-name buffer)))
+        (when (if matcher
+                  (funcall matcher filter buffer)
+                (or (null filter) (string-match filter (buffer-name buffer))))
           (when (and (null new-index) seen-current)
             (setq new-index (length buffers)))
           (push buffer buffers))))
