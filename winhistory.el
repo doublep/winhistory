@@ -382,10 +382,7 @@ Silently do nothing if there is no active switching process."
 
 (defun winhistory-name-word-part-subsequence-buffer-matcher (filter std-case-fold-search)
   (list (when filter
-          (let (parts)
-            ;; This is not really to replace anything, just collect the "parts".
-            (replace-regexp-in-string "\\w+\\|." (lambda (part) (push part parts) "") filter)
-            (mapconcat 'regexp-quote (nreverse parts) ".*")))
+          (substring (replace-regexp-in-string "\\w+\\|." (lambda (part) (concat ".*" (regexp-quote part))) filter t t) 2))
         nil
         std-case-fold-search))
 
