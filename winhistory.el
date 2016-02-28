@@ -333,7 +333,7 @@ only."
   (when (and winhistory--active-switch (characterp last-command-event))
     (-let (((&plist :index index :filter filter :index-stack index-stack) winhistory--active-switch))
       (winhistory--set-active-switch :filter-activated t
-                                     :filter           (concat filter (string last-command-event))
+                                     :filter           (concat filter (this-command-keys))
                                      :index-stack      (cons index index-stack))
       (winhistory--refilter-and-continue))))
 
@@ -566,7 +566,7 @@ Silently do nothing if there is no active switching process."
                                     (and filtering (winhistory--do-lookup-key winhistory-active-filter-switch-map keys)))))
           (if special-command
               (setq this-command special-command)
-            (if (and filtering (eq (winhistory--do-lookup-key global-map keys) 'self-insert-command))
+            (if (and filtering (memq (winhistory--do-lookup-key global-map keys) '(self-insert-command nil)))
                 (setq this-command 'winhistory-extend-filter)
               (winhistory-finalize-active-buffer-switch)))))
     (winhistory-finalize-active-buffer-switch)))
